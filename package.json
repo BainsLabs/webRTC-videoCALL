@@ -1,0 +1,43 @@
+{
+  "name": "webrtc-video-room",
+  "version": "2.0.2",
+  "description": "WebRTC Video Room is a Single-Page App in React using React Router that provides peer-to-peer video and audio communication in a web browser with minimum dependencies required.",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dondido/webrtc-video-room.git"
+  },
+  "scripts": {
+    "postinstall": "webpack --mode production",
+    "build": "webpack && npm run start"
+  },
+  "author": "Dian Dimitrov",
+  "keywords": [
+    "WebRTC Video Chat",
+    "RTCPeerConnection",
+    "React"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "babel-core": "^6.26.3",
+    "babel-loader": "^7.1.4",
+    "babel-preset-env": "^1.7.0",
+    "babel-preset-react": "^6.24.1",
+    "css-loader": "^0.28.11",
+    "style-loader": "^0.21.0",
+    "webpack": "^4.10.2",
+    "webpack-cli": "^3.3.2"
+  },
+  "dependencies": {
+    "compression": "^1.7.2",
+    "express": "^4.16.3",
+    "react": "^16.4.0",
+    "react-dom": ">=16.7.0",
+    "react-redux": "^5.0.7",
+    "react-router-dom": "^4.3.1",
+    "redux": "^4.0.0",
+    "remarkable": "^1.7.1",
+    "serve-favicon": "^2.5.0",
+    "socket.io": "^2.1.1"
+  }
+}
