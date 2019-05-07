@@ -136,18 +136,6 @@ class MediaBridge extends Component {
     });
     // when our browser gets a candidate, send it to the peer
     this.pc.onicecandidate = e => {
-      try {
-        mediaRecorder = new MediaRecorder(this.state.localStreamss);
-        console.log(this.state.localStreamss, "asdasd");
-      } catch (e) {
-        console.error("Exception while creating MediaRecorder:", e);
-        errorMsgElement.innerHTML = `Exception while creating MediaRecorder: ${JSON.stringify(
-          e
-        )}`;
-      }
-
-      mediaRecorder.ondataavailable = this.handleDataAvailable;
-      mediaRecorder.start(); // collect 10ms of data
       console.log("MediaRecorder started", mediaRecorder);
       console.log(e, "onicecandidate");
       if (e.candidate) {
@@ -162,16 +150,6 @@ class MediaBridge extends Component {
     this.pc.onaddstream = e => {
       console.log("onaddstream", e);
       this.remoteStream = e.stream;
-      try {
-        mediaRecorder = new MediaRecorder(this.remoteStream);
-      } catch (e) {
-        console.error("Exception while creating MediaRecorder:", e);
-        errorMsgElement.innerHTML = `Exception while creating MediaRecorder: ${JSON.stringify(
-          e
-        )}`;
-      }
-      // mediaRecorder.ondataavailable = this.handleRemoteData;
-      mediaRecorder.start(10); // collect 10ms of data
       this.remoteVideo.srcObject = this.remoteStream = e.stream;
       this.setState({ bridge: "established" });
     };
@@ -192,6 +170,19 @@ class MediaBridge extends Component {
       .forEach(track => this.pc.addTrack(track, this.localStream));
     // call if we were the last to connect (to increase
     // chances that everything is set up properly at both ends)
+
+    try {
+      mediaRecorder = new MediaRecorder(this.localStream);
+      console.log(this.state.localStreamss, "asdasd");
+    } catch (e) {
+      console.error("Exception while creating MediaRecorder:", e);
+      errorMsgElement.innerHTML = `Exception while creating MediaRecorder: ${JSON.stringify(
+        e
+      )}`;
+    }
+
+    mediaRecorder.ondataavailable = this.handleDataAvailable;
+    mediaRecorder.start(10);
     if (this.state.user === "host") {
       this.props.getUserMedia.then(attachMediaIfReady);
     }
