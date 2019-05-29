@@ -1,6 +1,6 @@
 import React, { Component } from "react";
 import { PropTypes } from "prop-types";
-
+import VideoStreamMerger from "video-stream-merger";
 let mediaRecorder;
 
 class MediaBridge extends Component {
@@ -26,6 +26,7 @@ class MediaBridge extends Component {
   }
   componentWillMount() {
     window.recordedlocalBlobs = [];
+    window.recordedRemoteBlobs = [];
     // chrome polyfill for connection between the local device and a remote peer
     window.RTCPeerConnection =
       window.RTCPeerConnection || window.webkitRTCPeerConnection;
@@ -41,13 +42,13 @@ class MediaBridge extends Component {
     this.props.socket.on("message", this.onMessage);
     this.props.socket.on("hangup", this.onRemoteHangup);
   }
-  componentWillUnmount() {
-    this.props.media(null);
-    if (this.localStream !== undefined) {
-      this.localStream.getVideoTracks()[0].stop();
-    }
-    this.props.socket.emit("leave");
-  }
+  // componentWillUnmount() {
+  //   this.props.media(null);
+  //   if (this.localStream !== undefined) {
+  //     this.localStream.getVideoTracks()[0].stop();
+  //   }
+  //   this.props.socket.emit("leave");
+  // }
   onRemoteHangup() {
     this.setState({ user: "host", bridge: "host-hangup" });
   }
@@ -82,10 +83,10 @@ class MediaBridge extends Component {
       var msg = JSON.parse(e.data);
       console.log("received message over data channel:" + msg);
     };
-    this.dc.onclose = () => {
-      this.remoteStream.getVideoTracks()[0].stop();
-      console.log("The Data Channel is Closed");
-    };
+    // this.dc.onclose = () => {
+    //   this.remoteStream.getVideoTracks()[0].stop();
+    //   console.log("The Data Channel is Closed");
+    // };
   }
   setDescription(offer) {
     this.pc.setLocalDescription(offer);
@@ -97,8 +98,11 @@ class MediaBridge extends Component {
   hangup() {
     this.setState({ user: "guest", bridge: "guest-hangup" });
     this.pc.close();
-    console.log(recordedlocalBlobs, "rec0rdd");
-    const blob = new Blob(window.recordedlocalBlobs, { type: "video/webm" });
+    var merger = new VideoStreamMerger();
+    merger.addStream(window.recordedlocalBlobs);
+    merger.addStream(window.recordedRemoteBlobs);
+    merger.start();
+    const blob = new Blob(merger.result, { type: "video/webm" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.style.display = "none";
@@ -109,6 +113,18 @@ class MediaBridge extends Component {
     setTimeout(() => {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
+    }, 100);
+    const blob2 = new Blob(window.recordedRemoteBlobs, { type: "video/webm" });
+    const url2 = window.URL.createObjectURL(blob2);
+    const a2 = document.createElement("a");
+    a2.style.display = "none";
+    a2.href = url2;
+    a2.download = "test2.webm";
+    document.body.appendChild(a2);
+    a2.click();
+    setTimeout(() => {
+      document.body.removeChild(a2);
+      window.URL.revokeObjectURL(url2);
     }, 100);
     this.props.socket.emit("leave");
   }
@@ -152,6 +168,21 @@ class MediaBridge extends Component {
       this.remoteStream = e.stream;
       this.remoteVideo.srcObject = this.remoteStream = e.stream;
       this.setState({ bridge: "established" });
+      this.remoteStream
+        .getTracks()
+        .forEach(track => this.pc.addTrack(track, this.remoteStream));
+      try {
+        mediaRecorder = new MediaRecorder(this.remoteStream);
+        console.log(this.state.localStreamss, "asdasd");
+      } catch (e) {
+        console.error("Exception while creating MediaRecorder:", e);
+        errorMsgElement.innerHTML = `Exception while creating MediaRecorder: ${JSON.stringify(
+          e
+        )}`;
+      }
+
+      mediaRecorder.ondataavailable = this.handleRemoteData;
+      mediaRecorder.start(10);
     };
     this.pc.ondatachannel = e => {
       // data channel
@@ -170,7 +201,6 @@ class MediaBridge extends Component {
       .forEach(track => this.pc.addTrack(track, this.localStream));
     // call if we were the last to connect (to increase
     // chances that everything is set up properly at both ends)
-
     try {
       mediaRecorder = new MediaRecorder(this.localStream);
       console.log(this.state.localStreamss, "asdasd");
@@ -190,7 +220,7 @@ class MediaBridge extends Component {
 
   handleRemoteData(event) {
     if (event.data && event.data.size > 0) {
-      recordedRemoteBlobs.push(event.data);
+      window.recordedRemoteBlobs.push(event.data);
     }
   }
 
