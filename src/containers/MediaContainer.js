@@ -24,6 +24,17 @@ class MediaBridge extends Component {
     this.init = this.init.bind(this);
     this.setDescription = this.setDescription.bind(this);
   }
+  static _startScreenCapture() {
+    if (navigator.getDisplayMedia) {
+      return navigator.getDisplayMedia({ video: true });
+    } else if (navigator.mediaDevices.getDisplayMedia) {
+      return navigator.mediaDevices.getDisplayMedia({ video: true });
+    } else {
+      return navigator.mediaDevices.getUserMedia({
+        video: { mediaSource: "screen" }
+      });
+    }
+  }
   componentWillMount() {
     window.recordedlocalBlobs = [];
     window.recordedRemoteBlobs = [];
@@ -96,13 +107,22 @@ class MediaBridge extends Component {
     this.props.socket.send(this.pc.localDescription);
   }
   hangup() {
+    console.log("Stop capturing.");
+    this.status = "Screen recorded completed.";
+    this.enableStartCapture = false;
+    this.enableStopCapture = true;
+    this.enableDownloadRecording = true;
+
+    this.mediaRecorder.stop();
+    this.mediaRecorder = null;
+    this.stream.getTracks().forEach(track => track.stop());
+    this.stream = null;
+
     this.setState({ user: "guest", bridge: "guest-hangup" });
     this.pc.close();
-    var merger = new VideoStreamMerger();
-    merger.addStream(window.recordedlocalBlobs);
-    merger.addStream(window.recordedRemoteBlobs);
-    merger.start();
-    const blob = new Blob(merger.result, { type: "video/webm" });
+
+    const blob = new Blob(window.recordedlocalBlobs, { type: "video/webm" });
+
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.style.display = "none";
@@ -114,24 +134,24 @@ class MediaBridge extends Component {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     }, 100);
-    const blob2 = new Blob(window.recordedRemoteBlobs, { type: "video/webm" });
-    const url2 = window.URL.createObjectURL(blob2);
-    const a2 = document.createElement("a");
-    a2.style.display = "none";
-    a2.href = url2;
-    a2.download = "test2.webm";
-    document.body.appendChild(a2);
-    a2.click();
-    setTimeout(() => {
-      document.body.removeChild(a2);
-      window.URL.revokeObjectURL(url2);
-    }, 100);
+    // const blob2 = new Blob(window.recordedRemoteBlobs, { type: "video/webm" });
+    // const url2 = window.URL.createObjectURL(blob2);
+    // const a2 = document.createElement("a");
+    // a2.style.display = "none";
+    // a2.href = url2;
+    // a2.download = "test2.webm";
+    // document.body.appendChild(a2);
+    // a2.click();
+    // setTimeout(() => {
+    //   document.body.removeChild(a2);
+    //   window.URL.revokeObjectURL(url2);
+    // }, 100);
     this.props.socket.emit("leave");
   }
   handleError(e) {
     console.log(e);
   }
-  init() {
+  async init() {
     // wait for local media to be ready
     const attachMediaIfReady = () => {
       this.dc = this.pc.createDataChannel("chat");
@@ -171,15 +191,6 @@ class MediaBridge extends Component {
       this.remoteStream
         .getTracks()
         .forEach(track => this.pc.addTrack(track, this.remoteStream));
-      try {
-        mediaRecorder = new MediaRecorder(this.remoteStream);
-        console.log(this.state.localStreamss, "asdasd");
-      } catch (e) {
-        console.error("Exception while creating MediaRecorder:", e);
-        errorMsgElement.innerHTML = `Exception while creating MediaRecorder: ${JSON.stringify(
-          e
-        )}`;
-      }
 
       mediaRecorder.ondataavailable = this.handleRemoteData;
       mediaRecorder.start(10);
@@ -201,18 +212,33 @@ class MediaBridge extends Component {
       .forEach(track => this.pc.addTrack(track, this.localStream));
     // call if we were the last to connect (to increase
     // chances that everything is set up properly at both ends)
-    try {
-      mediaRecorder = new MediaRecorder(this.localStream);
-      console.log(this.state.localStreamss, "asdasd");
-    } catch (e) {
-      console.error("Exception while creating MediaRecorder:", e);
-      errorMsgElement.innerHTML = `Exception while creating MediaRecorder: ${JSON.stringify(
-        e
-      )}`;
+    let recording = null;
+
+    console.log("Start capturing.");
+    this.status = "Screen recording started.";
+    this.enableStartCapture = false;
+    this.enableStopCapture = true;
+    this.enableDownloadRecording = false;
+
+    if (this.recording) {
+      window.URL.revokeObjectURL(this.recording);
     }
 
-    mediaRecorder.ondataavailable = this.handleDataAvailable;
-    mediaRecorder.start(10);
+    this.chunks = [];
+    this.recording = null;
+    this.stream = await MediaBridge._startScreenCapture();
+    this.stream.addEventListener("inactive", e => {
+      this._stopCapturing(e);
+    });
+    this.mediaRecorder = new MediaRecorder(this.stream, {
+      mimeType: "video/webm"
+    });
+    this.mediaRecorder.addEventListener("dataavailable", event => {
+      if (event.data && event.data.size > 0) {
+        window.recordedlocalBlobs.push(event.data);
+      }
+    });
+    this.mediaRecorder.start(10);
     if (this.state.user === "host") {
       this.props.getUserMedia.then(attachMediaIfReady);
     }
@@ -226,7 +252,6 @@ class MediaBridge extends Component {
 
   handleDataAvailable(event) {
     if (event.data && event.data.size > 0) {
-      window.recordedlocalBlobs.push(event.data);
     }
   }
   render() {
